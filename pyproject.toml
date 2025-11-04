@@ -1,0 +1,58 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling~=1.7"]
+
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "mypy>=1.18.2",
+    "pre-commit>=4.3.0",
+    "ruff>=0.13.3",
+    "types-psutil>=7.0.0.20251001",
+]
+
+[project]
+authors = []
+dependencies = [
+    "fastapi>=0.115",
+    "mss>=10.1.0",
+    "psutil>=7.1.0",
+    "pydantic>=2.12",
+    "typer",
+    "uvicorn>=0.30",
+]
+description = ""
+name = "os-course"
+requires-python = ">=3.14"
+version = "0.1.0"
+
+[tool.black]
+color = true
+line-length = 120
+target-version = ['py314']
+
+[tool.mypy]
+strict = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+
+[tool.tomlsort]
+all = true
+ignore_case = true
+in_place = true
+no_block_comments = false
+no_comments = false
+no_footer_comments = false
+no_header_comments = false
+no_inline_comments = false
+no_sort_tables = false
+sort_inline_arrays = true
+sort_inline_tables = true
+sort_table_keys = true
+spaces_before_inline_comment = 2
+spaces_indent_inline_array = 4
+trailing_comma_inline_array = true

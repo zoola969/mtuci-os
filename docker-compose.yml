@@ -1,0 +1,75 @@
+services:
+  server_1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: server_1
+    entrypoint: [ "python", "src/server.py" ]
+    environment:
+      - SERVER_SOCKET_PATH=/shared/server_1.sock
+      - LOCK_FILE_PATH=/shared/server_1.lock
+      - LOG_PIPE_PATH=/shared/server_1.pipe
+    volumes:
+      - shared:/shared
+    depends_on:
+      - log_server_1
+  log_server_1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: log_server_1
+    entrypoint: [ "python", "src/log_server.py" ]
+    environment:
+      - LOG_FILE_PATH=/shared/server_1.log
+      - PIPE_PATH=/shared/server_1.pipe
+    volumes:
+      - shared:/shared
+  server_2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: server_2
+    entrypoint: [ "python", "src/server.py" ]
+    environment:
+      - SERVER_SOCKET_PATH=/shared/server_2.sock
+      - LOCK_FILE_PATH=/shared/server_2.lock
+      - LOG_PIPE_PATH=/shared/server_2.pipe
+    volumes:
+      - shared:/shared
+    depends_on:
+      - log_server_2
+  log_server_2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: log_server_2
+    entrypoint: [ "python", "src/log_server.py" ]
+    environment:
+      - LOG_FILE_PATH=/shared/server_2.log
+      - PIPE_PATH=/shared/server_2.pipe
+    volumes:
+      - shared:/shared
+  client_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: client_api
+    entrypoint: ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      - SERVER_SOCKET_PATH_1=/shared/server_1.sock
+      - SERVER_SOCKET_PATH_2=/shared/server_2.sock
+    volumes:
+      - shared:/shared
+    depends_on:
+      - server_1
+      - server_2
+    ports:
+      - "8000:8000"
+
+volumes:
+  shared:

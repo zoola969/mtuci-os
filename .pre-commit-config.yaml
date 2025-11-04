@@ -1,0 +1,18 @@
+default_language_version:
+  python: python3.14
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 'v0.14.3'
+    hooks:
+      - id: ruff
+        args: [ --fix, --fix-only, --exit-non-zero-on-fix ]
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+  - repo: https://github.com/pappasam/toml-sort
+    rev: v0.24.3
+    hooks:
+      - id: toml-sort
+        entry: toml-sort
+        args: [ pyproject.toml ]
