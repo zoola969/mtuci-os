@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import TypeAdapter
+
 from consts import DEFAULT_SERVER_SOCKET
 from models.request import (
     CallABC,
@@ -16,7 +18,7 @@ from models.request import (
     GetProcessIdCall,
     GetThreadCountCall,
 )
-from models.response import Response
+from models.response import ErrorResponse, Response
 from utils.messagging import get_one_message, send_message
 
 
@@ -74,7 +76,7 @@ def build_request(what: WhatType, x: int | None, y: int | None) -> CallABC[Any]:
 
 def send[T: Response](
     client: socket.socket, message: CallABC[Any], shutdown_event: threading.Event, expected_response: type[T]
-) -> T:
+) -> T | ErrorResponse:
     send_message(client, message)
     raw = get_one_message(client, shutdown_event)
-    return expected_response.model_validate_json(raw)
+    return TypeAdapter(expected_response | ErrorResponse).validate_json(raw)

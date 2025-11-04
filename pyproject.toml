@@ -18,7 +18,6 @@ dependencies = [
     "mss>=10.1.0",
     "psutil>=7.1.0",
     "pydantic>=2.12",
-    "typer",
     "uvicorn>=0.30",
 ]
 description = ""

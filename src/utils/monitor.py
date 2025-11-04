@@ -23,7 +23,7 @@ def _get_main_monitor(sct: MSSBase) -> Monitor:
     try:
         return sct.monitors[1]  # 0 stands for all monitors, 1 for the main monitor
     except IndexError:
-        raise  # TODO: log error
+        raise RuntimeError("No monitors found")
 
 
 def _rgb2hex(*, r: int, g: int, b: int) -> str:

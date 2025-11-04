@@ -24,8 +24,12 @@ services:
     environment:
       - LOG_FILE_PATH=/shared/server_1.log
       - PIPE_PATH=/shared/server_1.pipe
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=wayland-0
     volumes:
       - shared:/shared
+      - /tmp/.X11-unix:/tmp/.X11-unix       # X11
+      - /run/user/${UID}/wayland-0:/run/user/1000/wayland-0  # Wayland
   server_2:
     build:
       context: .
@@ -70,6 +74,23 @@ services:
       - server_2
     ports:
       - "8000:8000"
+
+  client_cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: client_cli
+    tty: true
+    stdin_open: true
+    environment:
+      - SERVER_SOCKET_PATH_1=/shared/server_1.sock
+      - SERVER_SOCKET_PATH_2=/shared/server_2.sock
+    volumes:
+      - shared:/shared
+    depends_on:
+      - server_1
+      - server_2
 
 volumes:
   shared:

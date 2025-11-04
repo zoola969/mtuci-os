@@ -8,7 +8,7 @@ from models.base import MessageABC
 
 
 def send_message(s: socket, message: MessageABC) -> None:
-    msg = f"{message.model_dump(mode="json")}{MESSAGE_DELIMITER}".encode()
+    msg = f"{message.model_dump_json()}{MESSAGE_DELIMITER}".encode()
     s.sendall(msg)
 
 
