@@ -1,24 +1,33 @@
 import threading
-from socket import socket
+import socket
 from typing import Iterator
 
 from consts import MESSAGE_DELIMITER
+from types_ import TLogger
 from utils.log import log
 from models.base import MessageABC
 
 
-def send_message(s: socket, message: MessageABC) -> None:
+def send_message(s: socket.socket, message: MessageABC) -> None:
     msg = f"{message.model_dump_json()}{MESSAGE_DELIMITER}".encode()
     s.sendall(msg)
 
 
-def get_messages(s: socket, shutdown_event: threading.Event, *, read_bytes: int = 1024) -> Iterator[bytes]:
+def get_messages(
+    s: socket.socket, shutdown_event: threading.Event, logger: TLogger, *, read_bytes: int = 1024
+) -> Iterator[bytes]:
     try:
         buffer = b""
+        s.settimeout(1.0)
         while not shutdown_event.is_set():
-            data = s.recv(read_bytes)
+            try:
+                data = s.recv(read_bytes)
+            except socket.timeout:
+                logger("Client recv timed out, checking shutdown event...")
+                continue
+
             if not data:
-                log("Client disconnected")
+                logger("Client disconnected")
                 return
 
             parts = data.split(MESSAGE_DELIMITER.encode())
@@ -36,5 +45,7 @@ def get_messages(s: socket, shutdown_event: threading.Event, *, read_bytes: int 
         log(f"Client error: {e}")
 
 
-def get_one_message(s: socket, shutdown_event: threading.Event, *, read_bytes: int = 1024) -> bytes:
-    return next(get_messages(s, shutdown_event, read_bytes=read_bytes))
+def get_one_message(
+    s: socket.socket, shutdown_event: threading.Event, logger: TLogger, *, read_bytes: int = 1024
+) -> bytes:
+    return next(get_messages(s, shutdown_event, logger, read_bytes=read_bytes))

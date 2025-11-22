@@ -8,9 +8,11 @@ import threading
 from collections.abc import Iterator
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from types import FrameType
-from typing import Any, Callable, assert_never
+from types_ import TLogger
+from typing import Any, assert_never
 
 from consts import (
     DEFAULT_LOG_PIPE,
@@ -40,8 +42,6 @@ from models.response import (
 )
 from utils.messagging import get_messages, send_message
 
-type TLogger = Callable[[str], None]
-
 
 def main(*, server_socket: Path, lock_file: Path, log_pipe_path: Path) -> None:
     shutdown_event = threading.Event()
@@ -55,7 +55,6 @@ def main(*, server_socket: Path, lock_file: Path, log_pipe_path: Path) -> None:
         def shutdown(signum: int, _frame: FrameType | None) -> None:
             logger(f"Received shutdown signal {signum}, exiting...")
             shutdown_event.set()
-            sys.exit(0)
 
         signal.signal(signal.SIGINT, shutdown)
         signal.signal(signal.SIGTERM, shutdown)
@@ -68,7 +67,7 @@ def main(*, server_socket: Path, lock_file: Path, log_pipe_path: Path) -> None:
 def _open_log_pipe(log_pipe_path: Path) -> Iterator[TLogger]:
     def log(msg: str) -> None:
         print(msg)
-        log_pipe.write(msg + "\n")
+        log_pipe.write(f"timestamp='{datetime.now().isoformat()}' message='{msg}'\n")
         log_pipe.flush()
 
     with log_pipe_path.open("w") as log_pipe:
@@ -77,6 +76,7 @@ def _open_log_pipe(log_pipe_path: Path) -> Iterator[TLogger]:
 
 @contextmanager
 def _ensure_one_instance(lock_file_path: Path, logger: TLogger) -> Iterator[None]:
+    lock_file_path.parent.mkdir(exist_ok=True, parents=True)
     with lock_file_path.open("w") as lock_file:
         try:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -88,6 +88,7 @@ def _ensure_one_instance(lock_file_path: Path, logger: TLogger) -> Iterator[None
 
 @contextmanager
 def _run_server(socket_path: Path, logger: TLogger) -> Iterator[socket.socket]:
+    socket_path.parent.mkdir(exist_ok=True, parents=True)
     if socket_path.exists():
         socket_path.unlink()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
@@ -103,16 +104,22 @@ def _handle_clients(
     executor: ThreadPoolExecutor,
     shutdown_event: threading.Event,
 ) -> None:
+    server.settimeout(1.0)
     while not shutdown_event.is_set():
-        client, _ = server.accept()
+        try:
+            client, _ = server.accept()
+        except socket.timeout:
+            logger("Server accept timed out, checking shutdown event...")
+            continue
         logger("Client connected")
         executor.submit(_handle_client_messages, client, logger, shutdown_event)
+    logger("Client handler has been shut down")
     executor.shutdown(wait=True)
 
 
 def _handle_client_messages(conn: socket.socket, logger: TLogger, shutdown_event: threading.Event) -> None:
     with conn:
-        for message in get_messages(conn, shutdown_event):
+        for message in get_messages(conn, shutdown_event, logger):
             logger(f"Received message: {message}")
             response = _process_message(message)
             logger(f"Sending response: {response}")

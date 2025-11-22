@@ -19,6 +19,7 @@ from models.request import (
     GetThreadCountCall,
 )
 from models.response import ErrorResponse, Response
+from utils.log import log
 from utils.messagging import get_one_message, send_message
 
 
@@ -78,5 +79,5 @@ def send[T: Response](
     client: socket.socket, message: CallABC[Any], shutdown_event: threading.Event, expected_response: type[T]
 ) -> T | ErrorResponse:
     send_message(client, message)
-    raw = get_one_message(client, shutdown_event)
+    raw = get_one_message(client, shutdown_event, log)
     return TypeAdapter(expected_response | ErrorResponse).validate_json(raw)

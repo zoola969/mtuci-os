@@ -1,13 +1,13 @@
 import socket
 import threading
 from contextlib import asynccontextmanager
-from functools import partial
 from pathlib import Path
+from fastapi import Path as FastAPIPath
 from typing import Annotated, Any, AsyncIterator, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
-from pydantic.v1 import BaseSettings
+from pydantic_settings import BaseSettings
 from starlette.responses import RedirectResponse
 
 from client import send
@@ -50,8 +50,7 @@ class Server:
         return send(self._sock, message, self._shutdown_event, expected_response)
 
     def connect(self) -> None:
-        if self._sock is not None:
-            return
+        self.disconnect()
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(self._socket_path.as_posix())
         self._sock = s
@@ -67,19 +66,20 @@ class Server:
 @asynccontextmanager
 async def lifespan(app_: FastAPI) -> AsyncIterator[None]:
     print("Starting up Client...")
-    app_.state.server1 = Server("Server 1", client_settings.server_socket_path_1)
-    app_.state.server2 = Server("Server 2", client_settings.server_socket_path_2)
+    app_.state.server1 = Server("Server 1", client_settings.SERVER_SOCKET_PATH_1)
+    app_.state.server2 = Server("Server 2", client_settings.SERVER_SOCKET_PATH_2)
     yield
     print("Shutting down Client...")
 
 
 class ClientSettings(BaseSettings):
-    server_socket_path_1: Path
-    server_socket_path_2: Path
+    SERVER_SOCKET_PATH_1: Path
+    SERVER_SOCKET_PATH_2: Path
 
 
 client_settings = ClientSettings()
 
+type TServerId = Literal["1", "2"]
 
 app = FastAPI(title="OS Course Client API", lifespan=lifespan, version="1.0.0")
 
@@ -92,15 +92,36 @@ def get_server_2(request: Request) -> Server:
     return request.app.state.server2
 
 
-def get_connected_server(
+def get_connected_server_1(
+    server_1: Annotated[Server, Depends(get_server_1)],
+) -> Server:
+    if not server_1.connected:
+        raise HTTPException(status_code=409, detail=f"Server {server_1.name} is not connected")
+    return server_1
+
+
+def get_connected_server_2(
+    server_2: Annotated[Server, Depends(get_server_2)],
+) -> Server:
+    if not server_2.connected:
+        raise HTTPException(status_code=409, detail=f"Server {server_2.name} is not connected")
+    return server_2
+
+
+def get_server(
     server_1: Annotated[Server, Depends(get_server_1)],
     server_2: Annotated[Server, Depends(get_server_2)],
     *,
-    server_id: Annotated[Literal[1, 2], Path(description="1 or 2")],
+    server_id: Annotated[TServerId, FastAPIPath(description="1 or 2")],
 ) -> Server:
-    server = server_1 if server_id == 1 else server_2
+    return server_1 if server_id == "1" else server_2
+
+
+def get_connected_server(
+    server: Annotated[Server, Depends(get_server)],
+) -> Server:
     if not server.connected:
-        raise HTTPException(status_code=409, detail=f"Server {server_id} is not connected")
+        raise HTTPException(status_code=409, detail=f"Server {server.name} is not connected")
     return server
 
 
@@ -123,7 +144,7 @@ def servers_status(
 
 @app.post("/connect/{server_id}")
 def connect_server(
-    server: Annotated[Server, Depends(get_connected_server)],
+    server: Annotated[Server, Depends(get_server)],
 ) -> Status:
     server.connect()
     return Status(name=server.name, socket_path=server.socket_path.as_posix(), connected=True)
@@ -140,7 +161,7 @@ def disconnect_server(
 # Server 1 monitor endpoints
 @app.get("/server_1/monitor/params")
 def server1_monitor_params(
-    server: Annotated[Server, Depends(partial(get_connected_server, server_id=1))],
+    server: Annotated[Server, Depends(get_connected_server_1)],
 ) -> GetMainMonitorParamsResponse:
     return server.request(
         GetMainMonitorParamsCall(type=ECallType.GET_MAIN_MONITOR_PARAMS, params=None),
@@ -152,7 +173,7 @@ def server1_monitor_params(
 def server1_monitor_pixel(
     x: Annotated[int, Query(..., description="X for pixel")],
     y: Annotated[int, Query(..., description="Y for pixel")],
-    server: Annotated[Server, Depends(partial(get_connected_server, server_id=1))],
+    server: Annotated[Server, Depends(get_connected_server_1)],
 ) -> GetMainMonitorPixelColorResponse:
     return server.request(
         GetMainMonitorPixelColorCall(
@@ -166,7 +187,7 @@ def server1_monitor_pixel(
 # Server 2 pid/proc endpoints
 @app.get("/server_2/pid")
 def server2_pid(
-    server: Annotated[Server, Depends(partial(get_connected_server, server_id=2))],
+    server: Annotated[Server, Depends(get_connected_server_2)],
 ) -> GetProcessIdResponse:
     return server.request(
         GetProcessIdCall(type=ECallType.GET_PROCESS_ID, params=None),
@@ -176,7 +197,7 @@ def server2_pid(
 
 @app.get("/server_2/threads")
 def server2_threads(
-    server: Annotated[Server, Depends(partial(get_connected_server, server_id=2))],
+    server: Annotated[Server, Depends(get_connected_server_2)],
 ) -> GetThreadCountResponse:
     return server.request(
         GetThreadCountCall(type=ECallType.GET_THREAD_COUNT, params=None),
