@@ -16,7 +16,6 @@ from pathlib import Path
 
 import psutil
 
-
 if __name__ == "__main__":
     print(f"Hostname: {socket.gethostname()}, Username: {os.getlogin()}")
     print("###")
